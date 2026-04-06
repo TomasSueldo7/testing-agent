@@ -1,0 +1,92 @@
+# Inicio de sesión en clientes.balanz.com
+
+Escenario 1: Inicio de sesión exitoso
+Precondiciones:
+- El usuario ya tiene una cuenta creada en Balanz (email verificado).
+- La cuenta no está bloqueada ni suspendida.
+Pasos:
+Dado que el usuario ha ingresado a la página http://clientes.balanz.com
+Cuando el usuario ingresa su email y contraseña correctos
+Entonces se redirige al dashboard principal (/dashboard)
+
+Escenario 2: Inicio de sesión con Google
+Precondiciones:
+- El usuario ya tiene una cuenta creada en Balanz (email verificado).
+- La cuenta no está bloqueada ni suspendida.
+Pasos:
+Dado que el usuario ha seleccionado la opción 'Continuar con Google'
+Cuando se redirige al flujo de autenticación de Google
+Entonces se vuelve a Balanz con la sesión iniciada
+
+Escenario 3: Recuperación de contraseña
+Precondiciones:
+- El usuario ya tiene una cuenta creada en Balanz (email verificado).
+- La cuenta no está bloqueada ni suspendida.
+Pasos:
+Dado que el usuario ha seleccionado la opción '¿Olvidaste tu contraseña?'
+Cuando se redirige al flujo de recuperación
+Entonces el usuario recibe un email con link de reseteo válido por 30 minutos
+
+Escenario 4: Credenciales inválidas
+Precondiciones:
+- El usuario ya tiene una cuenta creada en Balanz (email verificado).
+- La cuenta no está bloqueada ni suspendida.
+Pasos:
+Dado que el usuario ha ingresado a la página http://clientes.balanz.com
+Cuando el usuario ingresa un email o contraseña incorrecto
+Entonces se muestra el mensaje 'Email o contraseña incorrectos'
+
+Escenario 5: Cuenta bloqueada por intentos fallidos
+Precondiciones:
+- El usuario ya tiene una cuenta creada en Balanz (email verificado).
+- La cuenta no está bloqueada ni suspendida.
+Pasos:
+Dado que el usuario ha ingresado a la página http://clientes.balanz.com
+Cuando se exceden los intentos de inicio de sesión fallidos
+Entonces se muestra el mensaje 'Cuenta bloqueada temporalmente. Intenta más tarde'
+
+Escenario 6: Campo email vacío o formato inválido
+Precondiciones:
+- El usuario ya tiene una cuenta creada en Balanz (email verificado).
+- La cuenta no está bloqueada ni suspendida.
+Pasos:
+Dado que el usuario ha ingresado a la página http://clientes.balanz.com
+Cuando se omite o ingresa un formato incorrecto para el email
+Entonces se muestra una validación en tiempo real
+
+Escenario 7: Contraseña vacía
+Precondiciones:
+- El usuario ya tiene una cuenta creada en Balanz (email verificado).
+- La cuenta no está bloqueada ni suspendida.
+Pasos:
+Dado que el usuario ha ingresado a la página http://clientes.balanz.com
+Cuando se omite la contraseña
+Entonces el botón ‘Iniciar sesión’ es deshabilitado
+
+Escenario 8: Tiempo de carga
+Precondiciones:
+- El usuario ya tiene una cuenta creada en Balanz (email verificado).
+- La cuenta no está bloqueada ni suspendida.
+Pasos:
+Dado que el usuario ha ingresado a la página http://clientes.balanz.com
+Cuando se carga la página
+Entonces se demora menos de 2 segundos
+
+Escenario 9: Responsive
+Precondiciones:
+- El usuario ya tiene una cuenta creada en Balanz (email verificado).
+- La cuenta no está bloqueada ni suspendida.
+Pasos:
+Dado que el usuario ha ingresado a la página http://clientes.balanz.com desde un dispositivo móvil
+Cuando se navega por la plataforma
+Entonces funciona correctamente en desktop y mobile
+
+Escenario 10: Políticas de seguridad
+Precondiciones:
+- El usuario ya tiene una cuenta creada en Balanz (email verificado).
+- La cuenta no está bloqueada ni suspendida.
+Pasos:
+Dado que el usuario ha ingresado a la página http://clientes.balanz.com
+Cuando se realiza un intento de brute force o se activa el rate limiting
+Entonces se aplica protección contra bruteforce y cumplen con las políticas de seguridad
+

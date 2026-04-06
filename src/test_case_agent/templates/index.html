@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Case Agent</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <style>
+        body { background-color: #0d1117; color: #c9d1d9; }
+        .sidebar { background-color: #161b22; transition: all 0.3s ease; }
+        .sidebar.collapsed { width: 70px !important; }
+        .sidebar.collapsed .text-label { display: none; }
+        .tab-btn { transition: all 0.2s ease; }
+        .tab-btn.active {
+            background-color: #21262d;
+            border-left: 4px solid #238636;
+            color: #fff;
+        }
+        .tab-btn:hover:not(.active) { background-color: #21262d; }
+        
+        #result-content {
+            background-color: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            padding: 20px;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+            white-space: pre-wrap;
+            max-height: 520px;
+            overflow-y: auto;
+            line-height: 1.6;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex">
+
+    <!-- Sidebar (mantenemos el que ya te gustaba) -->
+    <div id="sidebar" class="sidebar w-64 h-screen p-4 flex flex-col border-r border-[#30363d]">
+        <div class="flex items-center justify-between mb-8 px-2">
+            <div class="flex items-center gap-3">
+                <span class="text-3xl">🧪</span>
+                <h1 id="sidebar-title" class="text-2xl font-bold text-label">Test Case Agent</h1>
+            </div>
+            <button onclick="toggleSidebar()" class="text-gray-400 hover:text-white">
+                <i id="toggle-icon" class="fas fa-chevron-left text-xl"></i>
+            </button>
+        </div>
+
+        <button onclick="showTab('manual')" id="btn-manual"
+                class="tab-btn active flex items-center gap-3 w-full text-left px-4 py-3 rounded-lg mb-2">
+            <i class="fas fa-edit w-5"></i>
+            <span class="text-label">Descripción Manual</span>
+        </button>
+
+        <button onclick="showTab('jira')" id="btn-jira"
+                class="tab-btn flex items-center gap-3 w-full text-left px-4 py-3 rounded-lg mb-2">
+            <i class="fas fa-link w-5"></i>
+            <span class="text-label">Jira</span>
+        </button>
+
+        <div class="mt-auto text-xs text-gray-500 px-2 pt-6">
+            Versión Flask • Todo local
+        </div>
+    </div>
+
+    <!-- Contenido principal -->
+    <div class="flex-1 p-8 overflow-auto">
+
+        <!-- TAB 1: Manual -->
+        <div id="tab-manual">
+            <h2 class="text-3xl font-semibold mb-6">Descripción Manual</h2>
+            <textarea id="manual-desc" rows="8" class="w-full bg-[#161b22] border border-[#30363d] rounded-lg p-4 text-white" placeholder="Describe la funcionalidad..."></textarea>
+            <textarea id="manual-ctx" rows="3" class="w-full bg-[#161b22] border border-[#30363d] rounded-lg p-4 mt-4 text-white" placeholder="Contexto adicional (opcional)"></textarea>
+            
+            <button id="manual-btn" onclick="generateManual()" 
+                    class="mt-6 bg-green-600 hover:bg-green-700 text-white px-8 py-3 rounded-lg font-medium flex items-center gap-2">
+                <span id="manual-text">Generar casos de prueba</span>
+                <span id="manual-spinner" class="hidden"><i class="fas fa-spinner fa-spin"></i></span>
+            </button>
+        </div>
+
+        <!-- TAB 2: Jira -->
+        <div id="tab-jira" class="hidden">
+            <h2 class="text-3xl font-semibold mb-6">Ticket de Jira</h2>
+            <input id="jira-ticket" type="text" placeholder="BAL-456" class="w-full bg-[#161b22] border border-[#30363d] rounded-lg p-4 text-white">
+            <textarea id="jira-ctx" rows="3" class="w-full bg-[#161b22] border border-[#30363d] rounded-lg p-4 mt-4 text-white" placeholder="Contexto adicional (opcional)"></textarea>
+            
+            <button id="jira-btn" onclick="generateJira()" 
+                    class="mt-6 bg-green-600 hover:bg-green-700 text-white px-8 py-3 rounded-lg font-medium flex items-center gap-2">
+                <span id="jira-text">Cargar ticket y generar</span>
+                <span id="jira-spinner" class="hidden"><i class="fas fa-spinner fa-spin"></i></span>
+            </button>
+        </div>
+
+        <!-- Resultado -->
+        <div id="result" class="mt-10 hidden">
+            <h2 class="text-2xl font-bold mb-4">Resultado generado</h2>
+            <div id="result-content" contenteditable="true" class="min-h-[420px]"></div>
+            
+            <div class="mt-6 flex gap-4">
+                <button onclick="downloadJson()" 
+                        class="bg-gray-700 hover:bg-gray-600 text-white px-6 py-3 rounded-lg font-medium">
+                    📥 Descargar como JSON
+                </button>
+                <button onclick="downloadTxt()" 
+                        class="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-3 rounded-lg font-medium">
+                    📥 Descargar como TXT (texto editable)
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let sidebarCollapsed = false;
+
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            sidebarCollapsed = !sidebarCollapsed;
+            sidebar.classList.toggle('collapsed', sidebarCollapsed);
+            const icon = document.getElementById('toggle-icon');
+            icon.classList.toggle('fa-chevron-left', !sidebarCollapsed);
+            icon.classList.toggle('fa-chevron-right', sidebarCollapsed);
+        }
+
+        function showTab(tab) {
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            document.getElementById('btn-' + tab).classList.add('active');
+
+            document.querySelectorAll('#tab-manual, #tab-jira').forEach(tabEl => tabEl.classList.add('hidden'));
+            document.getElementById('tab-' + tab).classList.remove('hidden');
+        }
+
+        // ==================== MANUAL ====================
+        async function generateManual() {
+            const btn = document.getElementById('manual-btn');
+            const text = document.getElementById('manual-text');
+            const spinner = document.getElementById('manual-spinner');
+
+            btn.disabled = true;
+            text.classList.add('hidden');
+            spinner.classList.remove('hidden');
+
+            const desc = document.getElementById('manual-desc').value;
+            const ctx = document.getElementById('manual-ctx').value;
+
+            try {
+                const res = await fetch('/generate/manual', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({descripcion: desc, contexto: ctx})
+                });
+                const data = await res.json();
+                showResult(data);
+            } catch (e) {
+                alert("Error de conexión");
+            } finally {
+                btn.disabled = false;
+                text.classList.remove('hidden');
+                spinner.classList.add('hidden');
+            }
+        }
+
+        // ==================== JIRA ====================
+        async function generateJira() {
+            const btn = document.getElementById('jira-btn');
+            const text = document.getElementById('jira-text');
+            const spinner = document.getElementById('jira-spinner');
+
+            btn.disabled = true;
+            text.classList.add('hidden');
+            spinner.classList.remove('hidden');
+
+            const ticket = document.getElementById('jira-ticket').value;
+            const ctx = document.getElementById('jira-ctx').value;
+
+            try {
+                const res = await fetch('/generate/jira', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ticket: ticket, contexto: ctx})
+                });
+                const data = await res.json();
+                showResult(data);
+            } catch (e) {
+                alert("Error de conexión");
+            } finally {
+                btn.disabled = false;
+                text.classList.remove('hidden');
+                spinner.classList.add('hidden');
+            }
+        }
+
+function showResult(data) {
+    if (data.error) {
+        alert(data.error);
+        return;
+    }
+
+    let text = data.feature + "\n\n";
+
+    data.escenarios.forEach((esc, i) => {
+        text += `Escenario ${i+1}: ${esc.titulo}\n\n`;
+        text += `Precondiciones:\n`;
+        text += esc.precondiciones.map(p => `* ${p}`).join('\n') + "\n";
+        text += "\n"
+        text += `Pasos (Gherkin):\n`;
+        text += esc.steps.map(s => `* ${s}`).join('\n') + "\n\n";
+    });
+
+    // Asignamos como texto plano (sin HTML extra)
+    document.getElementById('result-content').innerText = text.trim();
+    document.getElementById('result').classList.remove('hidden');
+    window.currentResult = data;
+}
+
+        function downloadJson() {
+            if (!window.currentResult) return;
+            const data = window.currentResult;
+            const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `test-cases-${data.feature.replace(' ', '-')}.json`;
+            a.click();
+        }
+
+        function downloadTxt() {
+            if (!window.currentResult) return;
+            const content = document.getElementById('result-content').innerText;   // toma el texto tal cual está editado
+            const blob = new Blob([content], {type: 'text/plain'});
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `test-cases-${window.currentResult.feature.replace(' ', '-')}.txt`;
+            a.click();
+        }
+    </script>
+</body>
+</html>

@@ -1,120 +1,100 @@
-import streamlit as st
+from flask import Flask, render_template, request, jsonify, send_file
 import os
+import json
+from datetime import datetime
 from test_case_agent.core.generator import generar_test_cases, DEFAULT_MODEL
 from dotenv import load_dotenv
 from jira import JIRA
 
 load_dotenv()
 
-st.set_page_config(page_title="Test Case Agent", page_icon="🧪", layout="wide")
-st.title("🧪 Test Case Agent")
-st.caption("Generador local de casos de prueba en Gherkin (Ollama + Jira)")
+app = Flask(__name__, template_folder="templates", static_folder="static")
+
+# Crear carpeta suites y templates si no existen
+os.makedirs("suites", exist_ok=True)
+os.makedirs("templates", exist_ok=True)
+os.makedirs("static", exist_ok=True)
 
 # =============================================
-# FLUJO 1: Cargar desde Jira
+# RUTA PRINCIPAL
 # =============================================
-st.subheader("1. Cargar desde Jira")
-ticket_id = st.text_input("Ticket de Jira (ej: BAL-456)", placeholder="BAL-456")
-
-if st.button("📥 Cargar ticket de Jira", type="secondary"):
-    if not ticket_id.strip():
-        st.error("Ingresa un ticket de Jira")
-    else:
-        with st.spinner("Conectando a Jira..."):
-            try:
-                jira_client = JIRA(
-                    server=os.getenv("JIRA_URL"),
-                    basic_auth=(os.getenv("JIRA_EMAIL"), os.getenv("JIRA_API_TOKEN"))
-                )
-                issue = jira_client.issue(ticket_id.strip())
-                descripcion_jira = f"Ticket: {issue.key} - {issue.fields.summary}\n\n{issue.fields.description or 'Sin descripción'}"
-                
-                # Guardamos en session_state para que persista
-                st.session_state.descripcion_jira = descripcion_jira
-                st.success(f"✅ Ticket {issue.key} cargado correctamente")
-                
-            except Exception as e:
-                st.error(f"Error al cargar ticket: {e}")
+@app.route("/")
+def index():
+    return render_template("index.html")
 
 # =============================================
-# FLUJO 2: Descripción manual
+# GENERAR DESDE DESCRIPCIÓN MANUAL
 # =============================================
-st.subheader("2. Descripción manual")
-descripcion_manual = st.text_area(
-    "Descripción de la funcionalidad",
-    height=150,
-    placeholder="El usuario puede iniciar sesión con su email y contraseña...",
-    value=st.session_state.get("descripcion_manual", "")
-)
+@app.route("/generate/manual", methods=["POST"])
+def generate_manual():
+    data = request.json
+    descripcion = data.get("descripcion", "")
+    contexto = data.get("contexto", "")
 
-# Guardamos la descripción manual también en session_state
-if descripcion_manual:
-    st.session_state.descripcion_manual = descripcion_manual
+    if not descripcion.strip():
+        return jsonify({"error": "Ingresa una descripción"}), 400
 
-# =============================================
-# Contexto adicional (común a ambos flujos)
-# =============================================
-contexto = st.text_area("Contexto adicional o instrucciones extra (opcional)", height=100)
-
-# =============================================
-# Selección de modelo
-# =============================================
-model = st.selectbox(
-    "Modelo a usar",
-    ["ollama/qwen2:7b", "ollama/llama3.1:8b"],
-    index=0
-)
+    try:
+        resultado = generar_test_cases(descripcion, DEFAULT_MODEL, contexto, [])
+        return jsonify({
+            "success": True,
+            "feature": resultado.feature,
+            "escenarios": [esc.model_dump() for esc in resultado.escenarios]
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 # =============================================
-# LÓGICA DE GENERACIÓN (separada por flujo)
+# GENERAR DESDE JIRA
 # =============================================
-if st.button("Generar casos de prueba", type="primary"):
-    # Determinar qué descripción usar
-    if st.session_state.get("descripcion_jira"):
-        descripcion = st.session_state.descripcion_jira
-        fuente = "Jira"
-    elif st.session_state.get("descripcion_manual"):
-        descripcion = st.session_state.descripcion_manual
-        fuente = "Manual"
-    else:
-        st.error("Por favor carga un ticket de Jira o ingresa una descripción manual")
-        st.stop()
+@app.route("/generate/jira", methods=["POST"])
+def generate_jira():
+    data = request.json
+    ticket = data.get("ticket", "")
+    contexto = data.get("contexto", "")
 
-    with st.spinner(f"Generando casos de prueba desde {fuente}..."):
-        try:
-            resultado = generar_test_cases(descripcion, model, contexto, [])
+    if not ticket.strip():
+        return jsonify({"error": "Ingresa un ticket de Jira"}), 400
 
-            st.subheader(resultado.feature)
+    try:
+        jira_client = JIRA(
+            server=os.getenv("JIRA_URL"),
+            basic_auth=(os.getenv("JIRA_EMAIL"), os.getenv("JIRA_API_TOKEN"))
+        )
+        issue = jira_client.issue(ticket.strip())
+        desc_jira = f"Ticket: {issue.key} - {issue.fields.summary}\n\n{issue.fields.description or 'Sin descripción'}"
 
-            txt_output = f"# {resultado.feature}\n\n"
+        resultado = generar_test_cases(desc_jira, DEFAULT_MODEL, contexto, [])
+        return jsonify({
+            "success": True,
+            "feature": resultado.feature,
+            "escenarios": [esc.model_dump() for esc in resultado.escenarios]
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
-            for i, esc in enumerate(resultado.escenarios, 1):
-                st.markdown(f"**Escenario {i}: {esc.titulo}**")
-                
-                st.write("**Precondiciones**")
-                for p in esc.precondiciones:
-                    st.write(f"- {p}")
-                
-                st.write("**Pasos (Gherkin)**")
-                for step in esc.steps:
-                    st.write(f"{step}")
-                
-                st.divider()
+# =============================================
+# DESCARGAR TXT
+# =============================================
+@app.route("/download", methods=["POST"])
+def download_txt():
+    data = request.json
+    feature = data.get("feature", "test-cases")
+    escenarios = data.get("escenarios", [])
 
-                # Para el TXT
-                txt_output += f"Escenario {i}: {esc.titulo}\n"
-                txt_output += "Precondiciones:\n" + "\n".join(f"- {p}" for p in esc.precondiciones) + "\n"
-                txt_output += "Pasos:\n" + "\n".join(esc.steps) + "\n\n"
+    txt_content = f"# {feature}\n\n"
+    for i, esc in enumerate(escenarios, 1):
+        txt_content += f"Escenario {i}: {esc['titulo']}\n"
+        txt_content += "Precondiciones:\n" + "\n".join(f"- {p}" for p in esc['precondiciones']) + "\n"
+        txt_content += "Pasos:\n" + "\n".join(esc['steps']) + "\n\n"
 
-            # Botón de descarga
-            st.download_button(
-                label="📥 Descargar como .txt",
-                data=txt_output,
-                file_name=f"test-cases-{resultado.feature.replace(' ', '-')}.txt",
-                mime="text/plain"
-            )
+    filename = f"test-cases-{feature.replace(' ', '-')}.txt"
+    filepath = os.path.join("suites", filename)
+    
+    with open(filepath, "w", encoding="utf-8") as f:
+        f.write(txt_content)
 
-        except Exception as e:
-            st.error(f"Error: {e}")
+    return send_file(filepath, as_attachment=True)
 
-st.info("💡 Puedes usar **solo uno** de los dos flujos (Jira o Manual). El contexto adicional es común a ambos.")
+if __name__ == "__main__":
+    app.run(debug=True, port=5000)
