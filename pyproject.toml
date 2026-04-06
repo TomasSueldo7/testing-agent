@@ -1,0 +1,32 @@
+[tool.poetry]
+name = "test-case-agent"
+version = "0.1.0"
+description = "Asistente local para generar casos de prueba manuales en Gherkin"
+authors = ["Tu Nombre <tu@email.empresa.com>"]
+readme = "README.md"
+
+# Configuración correcta para layout src/
+packages = [{ include = "test_case_agent", from = "src" }]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+typer = {extras = ["all"], version = "^0.12"}
+rich = "^13.7"
+pydantic = "^2.7"
+instructor = "^1.0"
+litellm = "1.83.1"
+streamlit = "^1.32"
+python-dotenv = "^1.0"
+jira = "^3.10.5"
+
+[tool.poetry.scripts]
+test-agent = "test_case_agent.cli:main"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.0"
+black = "^24.0"
+ruff = "^0.3"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
