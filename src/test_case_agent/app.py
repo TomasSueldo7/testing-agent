@@ -114,4 +114,6 @@ def generate_jira():
         return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
-    app.run(host="127.0.0.1", port=3000, debug=False)
+    app.config['TEMPLATES_AUTO_RELOAD'] = True
+    print("=== Servidor iniciado - Templates Auto Reload activado ===")
+    app.run(host="127.0.0.1", port=3000, debug=True)

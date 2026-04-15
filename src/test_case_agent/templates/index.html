@@ -30,7 +30,7 @@
             overflow-y: auto;
             line-height: 1.5;
         }
-        
+
         /* Modal centrado */
         .modal {
             display: none;
@@ -177,6 +177,7 @@
     </div>
 
     <script>
+        console.log("%c=== INDEX.HTML VERSIÓN ACTUALIZADA - 2026-04-15 15:00 ===", "color: lime; font-weight: bold; font-size: 14px");
         let sidebarCollapsed = false;
         let currentEditIndex = -1;
 
@@ -227,47 +228,35 @@
             }
         }
 
-        function showResultManual(data) {
-            if (data.error) {
-                alert(data.error);
+        function downloadJsonManual() {
+            if (!window.currentResultManual) {
+                alert("Primero genera los casos de prueba en la pestaña Descripción Manual");
                 return;
             }
-
-            let text = data.feature + "\n\n";
-
-            data.escenarios.forEach((esc, i) => {
-                text += `Escenario ${i+1}: ${esc.titulo}\n\n`;
-                text += `Precondiciones:\n`;
-                text += esc.precondiciones.map(p => `* ${p}`).join('\n') + "\n\n";
-                text += `Pasos (Gherkin):\n`;
-                text += esc.steps.map(s => `* ${s}`).join('\n') + "\n\n";
-            });
-
-            document.getElementById('result-content-manual').innerText = text.trim();
-            document.getElementById('result-manual').classList.remove('hidden');
-            window.currentResultManual = data;
-        }
-
-        function downloadJsonManual() {
-            if (!window.currentResultManual) return;
-            const data = window.currentResult;
-            const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
+            const data = window.currentResultManual;
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `test-cases-${data.feature.replace(' ', '-')}.json`;
+            a.download = `test-cases-${(data.feature || 'resultado').replace(/ /g, '-')}.json`;
             a.click();
+            URL.revokeObjectURL(url);
         }
 
         function downloadTxtManual() {
-            if (!window.currentResultManual) return;
-                        const content = document.getElementById('result-content').innerText;
-            const blob = new Blob([content], {type: 'text/plain'});
+            const el = document.getElementById('result-content-manual');
+            if (!el || !el.innerText || el.innerText.trim() === '') {
+                alert("Primero genera los casos de prueba en la pestaña Descripción Manual");
+                return;
+            }
+            const content = el.innerText;
+            const blob = new Blob([content], { type: 'text/plain' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `test-cases-${window.currentResult.feature.replace(' ', '-')}.txt`;
+            a.download = `test-cases-${(window.currentResultManual?.feature || 'resultado').replace(/ /g, '-')}.txt`;
             a.click();
+            URL.revokeObjectURL(url);
         }
 
         // ==================== JIRA ====================
@@ -323,25 +312,34 @@
         }
 
         function downloadJsonJira() {
-            if (!window.currentResultJira) return;
-            const data = window.currentResult;
-            const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
+            if (!window.currentResultJira) {
+                alert("Primero genera los casos de prueba en la pestaña Jira");
+                return;
+            }
+            const data = window.currentResultJira;
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `test-cases-${data.feature.replace(' ', '-')}.json`;
+            a.download = `test-cases-${(data.feature || 'resultado').replace(/ /g, '-')}.json`;
             a.click();
+            URL.revokeObjectURL(url);
         }
 
         function downloadTxtJira() {
-            if (!window.currentResultJira) return;
-            const content = document.getElementById('result-content').innerText;
-            const blob = new Blob([content], {type: 'text/plain'});
+            const el = document.getElementById('result-content-jira');
+            if (!el || !el.innerText || el.innerText.trim() === '') {
+                alert("Primero genera los casos de prueba en la pestaña Jira");
+                return;
+            }
+            const content = el.innerText;
+            const blob = new Blob([content], { type: 'text/plain' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `test-cases-${window.currentResult.feature.replace(' ', '-')}.txt`;
+            a.download = `test-cases-${(window.currentResultJira?.feature || 'resultado').replace(/ /g, '-')}.txt`;
             a.click();
+            URL.revokeObjectURL(url);
         }
 
         // ==================== CONFIGURACIÓN + MODAL ====================
