@@ -1,4 +1,4 @@
-import litellm
+import ollama
 from .models import TestCaseResponse
 from .prompts import SYSTEM_PROMPT
 from dotenv import load_dotenv
@@ -7,34 +7,16 @@ import os
 
 load_dotenv()
 
-DEFAULT_MODEL = os.getenv("MODEL", "ollama/qwen2:7b")
+DEFAULT_MODEL = os.getenv("MODEL", "qwen2:7b") 
 
-def generar_test_cases(
-    descripcion: str,
-    model: str = DEFAULT_MODEL,
-    contexto_extra: str = "",
-    tags: list = None
-) -> TestCaseResponse:
-    if tags is None:
-        tags = []
-
-    # === DEBUG FUERTE: qué está llegando realmente ===
-    print("\n" + "="*80)
-    print("DEBUG GENERATOR - DESCRIPCIÓN RECIBIDA DEL CLI/JIRA:")
-    print(descripcion[:1500])   # mostramos los primeros 1500 caracteres
-    print("="*80 + "\n")
-
-    user_prompt = f"""Genera casos de prueba **EXCLUSIVAMENTE** para esta funcionalidad descrita en el ticket Jira:
+def generar_test_cases(descripcion: str, model: str = DEFAULT_MODEL, contexto_extra: str = "") -> TestCaseResponse:
+    user_prompt = f"""Genera casos de prueba **EXCLUSIVAMENTE** basados en esta descripción:
 
 {descripcion}
 
-Contexto adicional del usuario:
-{contexto_extra if contexto_extra else "Ninguno"}
+{contexto_extra if contexto_extra else ""}
 
-Tags sugeridos: {', '.join(tags) if tags else "Ninguno"}
-
-IMPORTANTE: Usa SOLO la información del ticket anterior. No inventes nada.
-"""
+Responde **SOLO** con un JSON válido. Nada más. No uses markdown, no uses ```json."""
 
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
@@ -43,17 +25,17 @@ IMPORTANTE: Usa SOLO la información del ticket anterior. No inventes nada.
 
     for intento in range(1, 6):
         try:
-            response = litellm.completion(
+            response = ollama.chat(
                 model=model,
                 messages=messages,
-                temperature=0.0,
-                max_tokens=4000,
+                options={"temperature": 0.0, "num_predict": 4000}
             )
 
-            content = response.choices[0].message.content.strip()
-            print(f"\n[DEBUG - Respuesta cruda (intento {intento})]\n{content}\n")
+            content = response['message']['content'].strip()
 
-            # Extraer JSON
+            print(f"\n[DEBUG intento {intento}] Respuesta cruda:\n{content}\n")
+
+            # Limpieza del JSON
             if "```json" in content:
                 start = content.find("```json") + 7
                 end = content.find("```", start)

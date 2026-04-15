@@ -1,29 +1,63 @@
 from flask import Flask, render_template, request, jsonify, send_file
 import os
+import sys
 import json
 from datetime import datetime
-from test_case_agent.core.generator import generar_test_cases, DEFAULT_MODEL
+from .core.generator import generar_test_cases, DEFAULT_MODEL
 from dotenv import load_dotenv
 from jira import JIRA
 
 load_dotenv()
 
-app = Flask(__name__, template_folder="templates", static_folder="static")
+# === MANEJO DE TEMPLATES PARA PYINSTALLER ===
+if getattr(sys, 'frozen', False):
+    template_folder = os.path.join(sys._MEIPASS, 'templates')
+    config_path = os.path.join(os.path.dirname(sys.executable), "config.json")
+else:
+    template_folder = os.path.join(os.path.dirname(__file__), 'templates')
+    config_path = "config.json"
 
-# Crear carpeta suites y templates si no existen
-os.makedirs("suites", exist_ok=True)
-os.makedirs("templates", exist_ok=True)
-os.makedirs("static", exist_ok=True)
+app = Flask(__name__, template_folder=template_folder)
 
-# =============================================
-# RUTA PRINCIPAL
-# =============================================
+# Cargar / Guardar configuración (multi-Jira)
+def load_config():
+    default = {
+        "model": "qwen2:7b",
+        "jira_profiles": []   # lista de perfiles: [{"name": "Proyecto A", "url": "...", "email": "...", "token": "..."}]
+    }
+    if os.path.exists(config_path):
+        try:
+            with open(config_path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except:
+            return default
+    return default
+
+def save_config(config):
+    with open(config_path, "w", encoding="utf-8") as f:
+        json.dump(config, f, ensure_ascii=False, indent=2)
+
+config = load_config()
+
 @app.route("/")
 def index():
     return render_template("index.html")
 
+@app.route("/api/config", methods=["GET"])
+def get_config():
+    return jsonify(config)
+
+@app.route("/api/config", methods=["POST"])
+def save_config_api():
+    global config
+    data = request.json
+    config["model"] = data.get("model", "qwen2:7b")
+    config["jira_profiles"] = data.get("jira_profiles", [])
+    save_config(config)
+    return jsonify({"success": True})
+
 # =============================================
-# GENERAR DESDE DESCRIPCIÓN MANUAL
+# GENERAR MANUAL
 # =============================================
 @app.route("/generate/manual", methods=["POST"])
 def generate_manual():
@@ -35,7 +69,7 @@ def generate_manual():
         return jsonify({"error": "Ingresa una descripción"}), 400
 
     try:
-        resultado = generar_test_cases(descripcion, DEFAULT_MODEL, contexto, [])
+        resultado = generar_test_cases(descripcion, config["model"], contexto)
         return jsonify({
             "success": True,
             "feature": resultado.feature,
@@ -45,26 +79,32 @@ def generate_manual():
         return jsonify({"error": str(e)}), 500
 
 # =============================================
-# GENERAR DESDE JIRA
+# GENERAR JIRA (usa el perfil seleccionado)
 # =============================================
 @app.route("/generate/jira", methods=["POST"])
 def generate_jira():
     data = request.json
     ticket = data.get("ticket", "")
     contexto = data.get("contexto", "")
+    profile_index = data.get("profile_index", 0)
 
     if not ticket.strip():
         return jsonify({"error": "Ingresa un ticket de Jira"}), 400
 
     try:
+        profiles = config.get("jira_profiles", [])
+        if not profiles or profile_index >= len(profiles):
+            return jsonify({"error": "No hay perfiles de Jira configurados"}), 400
+
+        profile = profiles[profile_index]
         jira_client = JIRA(
-            server=os.getenv("JIRA_URL"),
-            basic_auth=(os.getenv("JIRA_EMAIL"), os.getenv("JIRA_API_TOKEN"))
+            server=profile["url"],
+            basic_auth=(profile["email"], profile["token"])
         )
         issue = jira_client.issue(ticket.strip())
         desc_jira = f"Ticket: {issue.key} - {issue.fields.summary}\n\n{issue.fields.description or 'Sin descripción'}"
 
-        resultado = generar_test_cases(desc_jira, DEFAULT_MODEL, contexto, [])
+        resultado = generar_test_cases(desc_jira, config["model"], contexto)
         return jsonify({
             "success": True,
             "feature": resultado.feature,
@@ -73,28 +113,5 @@ def generate_jira():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-# =============================================
-# DESCARGAR TXT
-# =============================================
-@app.route("/download", methods=["POST"])
-def download_txt():
-    data = request.json
-    feature = data.get("feature", "test-cases")
-    escenarios = data.get("escenarios", [])
-
-    txt_content = f"# {feature}\n\n"
-    for i, esc in enumerate(escenarios, 1):
-        txt_content += f"Escenario {i}: {esc['titulo']}\n"
-        txt_content += "Precondiciones:\n" + "\n".join(f"- {p}" for p in esc['precondiciones']) + "\n"
-        txt_content += "Pasos:\n" + "\n".join(esc['steps']) + "\n\n"
-
-    filename = f"test-cases-{feature.replace(' ', '-')}.txt"
-    filepath = os.path.join("suites", filename)
-    
-    with open(filepath, "w", encoding="utf-8") as f:
-        f.write(txt_content)
-
-    return send_file(filepath, as_attachment=True)
-
 if __name__ == "__main__":
-    app.run(debug=True, port=5000)
+    app.run(host="127.0.0.1", port=3000, debug=False)

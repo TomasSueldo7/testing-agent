@@ -19,7 +19,7 @@
         }
         .tab-btn:hover:not(.active) { background-color: #21262d; }
         
-        #result-content {
+        .result-container {
             background-color: #161b22;
             border: 1px solid #30363d;
             border-radius: 8px;
@@ -28,13 +28,32 @@
             white-space: pre-wrap;
             max-height: 520px;
             overflow-y: auto;
-            line-height: 1.6;
+            line-height: 1.5;
+        }
+        
+        /* Modal centrado */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: rgba(0,0,0,0.75);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal-content {
+            background: #161b22;
+            border-radius: 12px;
+            width: 480px;
+            padding: 24px;
+            box-shadow: 0 10px 15px -3px rgba(0,0,0,0.3);
         }
     </style>
 </head>
 <body class="min-h-screen flex">
 
-    <!-- Sidebar (mantenemos el que ya te gustaba) -->
+    <!-- Sidebar -->
     <div id="sidebar" class="sidebar w-64 h-screen p-4 flex flex-col border-r border-[#30363d]">
         <div class="flex items-center justify-between mb-8 px-2">
             <div class="flex items-center gap-3">
@@ -58,6 +77,12 @@
             <span class="text-label">Jira</span>
         </button>
 
+        <button onclick="showTab('config')" id="btn-config"
+                class="tab-btn flex items-center gap-3 w-full text-left px-4 py-3 rounded-lg mb-2">
+            <i class="fas fa-cog w-5"></i>
+            <span class="text-label">Configuración</span>
+        </button>
+
         <div class="mt-auto text-xs text-gray-500 px-2 pt-6">
             Versión Flask • Todo local
         </div>
@@ -77,11 +102,22 @@
                 <span id="manual-text">Generar casos de prueba</span>
                 <span id="manual-spinner" class="hidden"><i class="fas fa-spinner fa-spin"></i></span>
             </button>
+
+            <!-- Resultado exclusivo de Manual -->
+            <div id="result-manual" class="mt-10 hidden">
+                <h2 class="text-2xl font-bold mb-4">Resultado generado (Manual)</h2>
+                <div id="result-content-manual" contenteditable="true" class="result-container"></div>
+                <div class="mt-6 flex gap-4">
+                    <button onclick="downloadJsonManual()" class="bg-gray-700 hover:bg-gray-600 text-white px-6 py-3 rounded-lg font-medium">📥 Descargar como JSON</button>
+                    <button onclick="downloadTxtManual()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-3 rounded-lg font-medium">📥 Descargar como TXT</button>
+                </div>
+            </div>
         </div>
 
         <!-- TAB 2: Jira -->
         <div id="tab-jira" class="hidden">
             <h2 class="text-3xl font-semibold mb-6">Ticket de Jira</h2>
+            <select id="jira-profile" class="w-full bg-[#161b22] border border-[#30363d] rounded-lg p-3 text-white mb-4"></select>
             <input id="jira-ticket" type="text" placeholder="BAL-456" class="w-full bg-[#161b22] border border-[#30363d] rounded-lg p-4 text-white">
             <textarea id="jira-ctx" rows="3" class="w-full bg-[#161b22] border border-[#30363d] rounded-lg p-4 mt-4 text-white" placeholder="Contexto adicional (opcional)"></textarea>
             
@@ -90,28 +126,59 @@
                 <span id="jira-text">Cargar ticket y generar</span>
                 <span id="jira-spinner" class="hidden"><i class="fas fa-spinner fa-spin"></i></span>
             </button>
+
+            <!-- Resultado exclusivo de Jira -->
+            <div id="result-jira" class="mt-10 hidden">
+                <h2 class="text-2xl font-bold mb-4">Resultado generado (Jira)</h2>
+                <div id="result-content-jira" contenteditable="true" class="result-container"></div>
+                <div class="mt-6 flex gap-4">
+                    <button onclick="downloadJsonJira()" class="bg-gray-700 hover:bg-gray-600 text-white px-6 py-3 rounded-lg font-medium">📥 Descargar como JSON</button>
+                    <button onclick="downloadTxtJira()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-3 rounded-lg font-medium">📥 Descargar como TXT</button>
+                </div>
+            </div>
         </div>
 
-        <!-- Resultado -->
-        <div id="result" class="mt-10 hidden">
-            <h2 class="text-2xl font-bold mb-4">Resultado generado</h2>
-            <div id="result-content" contenteditable="true" class="min-h-[420px]"></div>
+        <!-- TAB 3: Configuración -->
+        <div id="tab-config" class="hidden">
+            <h2 class="text-3xl font-semibold mb-6">Configuración</h2>
+            <div class="bg-[#161b22] border border-[#30363d] rounded-lg p-6">
+                <h3 class="font-semibold mb-4">Modelo Ollama</h3>
+                <select id="config-model" class="w-full bg-[#0d1117] border border-[#30363d] rounded-lg p-3 text-white">
+                    <option value="qwen2:7b">qwen2:7b (recomendado)</option>
+                    <option value="llama3.1:8b">llama3.1:8b</option>
+                </select>
+
+                <h3 class="font-semibold mt-8 mb-4">Perfiles de Jira</h3>
+                <div id="jira-profiles-list" class="flex flex-wrap gap-2"></div>
+
+                <button onclick="openAddProfileModal()" class="mt-6 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium flex items-center gap-2">
+                    <i class="fas fa-plus"></i>
+                    Agregar nuevo perfil Jira
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal centrado -->
+    <div id="profile-modal" class="modal">
+        <div class="modal-content">
+            <h3 id="modal-title" class="text-xl font-semibold mb-6">Nuevo perfil de Jira</h3>
             
-            <div class="mt-6 flex gap-4">
-                <button onclick="downloadJson()" 
-                        class="bg-gray-700 hover:bg-gray-600 text-white px-6 py-3 rounded-lg font-medium">
-                    📥 Descargar como JSON
-                </button>
-                <button onclick="downloadTxt()" 
-                        class="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-3 rounded-lg font-medium">
-                    📥 Descargar como TXT (texto editable)
-                </button>
+            <input id="modal-name" type="text" placeholder="Nombre del perfil" class="w-full bg-[#0d1117] border border-[#30363d] rounded-lg p-3 text-white mb-4">
+            <input id="modal-url" type="text" placeholder="https://tu-empresa.atlassian.net" class="w-full bg-[#0d1117] border border-[#30363d] rounded-lg p-3 text-white mb-4">
+            <input id="modal-email" type="email" placeholder="tuemail@empresa.com" class="w-full bg-[#0d1117] border border-[#30363d] rounded-lg p-3 text-white mb-4">
+            <input id="modal-token" type="password" placeholder="API Token" class="w-full bg-[#0d1117] border border-[#30363d] rounded-lg p-3 text-white mb-6">
+
+            <div class="flex justify-end gap-3">
+                <button onclick="closeModal()" class="px-6 py-2 text-gray-400 hover:text-white">Cancelar</button>
+                <button onclick="saveProfile()" class="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg">Guardar Perfil</button>
             </div>
         </div>
     </div>
 
     <script>
         let sidebarCollapsed = false;
+        let currentEditIndex = -1;
 
         function toggleSidebar() {
             const sidebar = document.getElementById('sidebar');
@@ -126,7 +193,7 @@
             document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
             document.getElementById('btn-' + tab).classList.add('active');
 
-            document.querySelectorAll('#tab-manual, #tab-jira').forEach(tabEl => tabEl.classList.add('hidden'));
+            document.querySelectorAll('#tab-manual, #tab-jira, #tab-config').forEach(tabEl => tabEl.classList.add('hidden'));
             document.getElementById('tab-' + tab).classList.remove('hidden');
         }
 
@@ -150,7 +217,7 @@
                     body: JSON.stringify({descripcion: desc, contexto: ctx})
                 });
                 const data = await res.json();
-                showResult(data);
+                showResultManual(data);
             } catch (e) {
                 alert("Error de conexión");
             } finally {
@@ -158,6 +225,49 @@
                 text.classList.remove('hidden');
                 spinner.classList.add('hidden');
             }
+        }
+
+        function showResultManual(data) {
+            if (data.error) {
+                alert(data.error);
+                return;
+            }
+
+            let text = data.feature + "\n\n";
+
+            data.escenarios.forEach((esc, i) => {
+                text += `Escenario ${i+1}: ${esc.titulo}\n\n`;
+                text += `Precondiciones:\n`;
+                text += esc.precondiciones.map(p => `* ${p}`).join('\n') + "\n\n";
+                text += `Pasos (Gherkin):\n`;
+                text += esc.steps.map(s => `* ${s}`).join('\n') + "\n\n";
+            });
+
+            document.getElementById('result-content-manual').innerText = text.trim();
+            document.getElementById('result-manual').classList.remove('hidden');
+            window.currentResultManual = data;
+        }
+
+        function downloadJsonManual() {
+            if (!window.currentResultManual) return;
+            const data = window.currentResult;
+            const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `test-cases-${data.feature.replace(' ', '-')}.json`;
+            a.click();
+        }
+
+        function downloadTxtManual() {
+            if (!window.currentResultManual) return;
+                        const content = document.getElementById('result-content').innerText;
+            const blob = new Blob([content], {type: 'text/plain'});
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `test-cases-${window.currentResult.feature.replace(' ', '-')}.txt`;
+            a.click();
         }
 
         // ==================== JIRA ====================
@@ -170,6 +280,7 @@
             text.classList.add('hidden');
             spinner.classList.remove('hidden');
 
+            const profileIndex = document.getElementById('jira-profile').selectedIndex;
             const ticket = document.getElementById('jira-ticket').value;
             const ctx = document.getElementById('jira-ctx').value;
 
@@ -177,10 +288,10 @@
                 const res = await fetch('/generate/jira', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ticket: ticket, contexto: ctx})
+                    body: JSON.stringify({ticket: ticket, contexto: ctx, profile_index: profileIndex})
                 });
                 const data = await res.json();
-                showResult(data);
+                showResultJira(data);
             } catch (e) {
                 alert("Error de conexión");
             } finally {
@@ -190,31 +301,29 @@
             }
         }
 
-function showResult(data) {
-    if (data.error) {
-        alert(data.error);
-        return;
-    }
+        function showResultJira(data) {
+            if (data.error) {
+                alert(data.error);
+                return;
+            }
 
-    let text = data.feature + "\n\n";
+            let text = data.feature + "\n\n";
 
-    data.escenarios.forEach((esc, i) => {
-        text += `Escenario ${i+1}: ${esc.titulo}\n\n`;
-        text += `Precondiciones:\n`;
-        text += esc.precondiciones.map(p => `* ${p}`).join('\n') + "\n";
-        text += "\n"
-        text += `Pasos (Gherkin):\n`;
-        text += esc.steps.map(s => `* ${s}`).join('\n') + "\n\n";
-    });
+            data.escenarios.forEach((esc, i) => {
+                text += `Escenario ${i+1}: ${esc.titulo}\n\n`;
+                text += `Precondiciones:\n`;
+                text += esc.precondiciones.map(p => `* ${p}`).join('\n') + "\n\n";
+                text += `Pasos (Gherkin):\n`;
+                text += esc.steps.map(s => `* ${s}`).join('\n') + "\n\n";
+            });
 
-    // Asignamos como texto plano (sin HTML extra)
-    document.getElementById('result-content').innerText = text.trim();
-    document.getElementById('result').classList.remove('hidden');
-    window.currentResult = data;
-}
+            document.getElementById('result-content-jira').innerText = text.trim();
+            document.getElementById('result-jira').classList.remove('hidden');
+            window.currentResultJira = data;
+        }
 
-        function downloadJson() {
-            if (!window.currentResult) return;
+        function downloadJsonJira() {
+            if (!window.currentResultJira) return;
             const data = window.currentResult;
             const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
             const url = URL.createObjectURL(blob);
@@ -224,15 +333,123 @@ function showResult(data) {
             a.click();
         }
 
-        function downloadTxt() {
-            if (!window.currentResult) return;
-            const content = document.getElementById('result-content').innerText;   // toma el texto tal cual está editado
+        function downloadTxtJira() {
+            if (!window.currentResultJira) return;
+            const content = document.getElementById('result-content').innerText;
             const blob = new Blob([content], {type: 'text/plain'});
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
             a.download = `test-cases-${window.currentResult.feature.replace(' ', '-')}.txt`;
             a.click();
+        }
+
+        // ==================== CONFIGURACIÓN + MODAL ====================
+        window.onload = async () => {
+            const res = await fetch('/api/config');
+            const data = await res.json();
+            document.getElementById('config-model').value = data.model || "qwen2:7b";
+            renderJiraProfiles(data.jira_profiles || []);
+        };
+
+        function renderJiraProfiles(profiles) {
+            const container = document.getElementById('jira-profiles-list');
+            container.innerHTML = '';
+            if (profiles.length === 0) {
+                container.innerHTML = '<p class="text-gray-400 italic">No hay perfiles configurados todavía.</p>';
+                return;
+            }
+            profiles.forEach((p, index) => {
+                container.innerHTML += `
+                    <div class="inline-flex items-center gap-2 bg-[#21262d] text-white px-4 py-2 rounded-full text-sm">
+                        <span>${p.name || 'Perfil ' + (index+1)}</span>
+                        <button onclick="editProfile(${index})" class="text-blue-400 hover:text-blue-300"><i class="fas fa-edit"></i></button>
+                        <button onclick="deleteProfile(${index})" class="text-red-400 hover:text-red-300"><i class="fas fa-trash"></i></button>
+                    </div>`;
+            });
+            const select = document.getElementById('jira-profile');
+            select.innerHTML = '';
+            profiles.forEach((p, i) => {
+                const option = document.createElement('option');
+                option.value = i;
+                option.textContent = p.name || 'Perfil ' + (i+1);
+                select.appendChild(option);
+            });
+        }
+
+        function openAddProfileModal() {
+            currentEditIndex = -1;
+            document.getElementById('modal-title').textContent = "Nuevo perfil de Jira";
+            document.getElementById('modal-name').value = "";
+            document.getElementById('modal-url').value = "";
+            document.getElementById('modal-email').value = "";
+            document.getElementById('modal-token').value = "";
+            document.getElementById('profile-modal').style.display = 'flex';
+        }
+
+        function editProfile(index) {
+            currentEditIndex = index;
+            fetch('/api/config')
+                .then(r => r.json())
+                .then(data => {
+                    const p = data.jira_profiles[index];
+                    document.getElementById('modal-title').textContent = "Editar perfil de Jira";
+                    document.getElementById('modal-name').value = p.name || "";
+                    document.getElementById('modal-url').value = p.url || "";
+                    document.getElementById('modal-email').value = p.email || "";
+                    document.getElementById('modal-token').value = p.token || "";
+                    document.getElementById('profile-modal').style.display = 'flex';
+                });
+        }
+
+        function closeModal() {
+            document.getElementById('profile-modal').style.display = 'none';
+            currentEditIndex = -1;
+        }
+
+        function saveProfile() {
+            const name = document.getElementById('modal-name').value.trim();
+            const url = document.getElementById('modal-url').value.trim();
+            const email = document.getElementById('modal-email').value.trim();
+            const token = document.getElementById('modal-token').value.trim();
+
+            fetch('/api/config')
+                .then(r => r.json())
+                .then(data => {
+                    data.jira_profiles = data.jira_profiles || [];
+                    const profile = { name, url, email, token };
+
+                    if (currentEditIndex >= 0) {
+                        data.jira_profiles[currentEditIndex] = profile;
+                    } else {
+                        data.jira_profiles.push(profile);
+                    }
+
+                    return fetch('/api/config', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify(data)
+                    });
+                })
+                .then(() => {
+                    closeModal();
+                    window.onload();
+                });
+        }
+
+        function deleteProfile(index) {
+            if (!confirm("¿Eliminar este perfil?")) return;
+            fetch('/api/config')
+                .then(r => r.json())
+                .then(data => {
+                    data.jira_profiles.splice(index, 1);
+                    return fetch('/api/config', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify(data)
+                    });
+                })
+                .then(() => window.onload());
         }
     </script>
 </body>
